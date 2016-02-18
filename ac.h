@@ -51,6 +51,15 @@ typedef unsigned char	InputTy;
 #endif
 
 
+#define CHAR_SET_SIZE  256
+
+#define AC_MAGIC_NUM	0x5a
+
+#define bool			int
+#define true			1
+#define false			0
+
+
 typedef struct {
 	size_t				len;
 	u_char				*data;
@@ -72,6 +81,7 @@ struct acs_state_s {
 	int						depth;
 	int						terminal;
 	int						goto_num;
+	int						current;
 	struct acs_state_s		*goto_map[CHAR_SET_SIZE];
 	struct acs_state_s		*fail_link;
 };
@@ -80,17 +90,20 @@ struct acs_state_s {
 typedef void *(acs_malloc_func)(size_t);
 typedef void *(acs_free_func)(void *);
 
-typedef struct {
-	acs_state_t				root;
-	u_char					root_char[CHAR_SET_SIZE];
-	ac_array_t				all_states;
 
+
+typedef struct {
+	acs_state_t				*root;
+	u_char					root_char[CHAR_SET_SIZE];
+	int						state_num;
+	ac_array_t				all_states;
+	int						state_id;
 } acs_constructor_t;
 
 
 typedef enum {
-	IMPL_SLOW_VARIANT = 1;
-	IMPL_FAST_VARIANT = 2;
+	IMPL_SLOW_VARIANT = 1,
+	IMPL_FAST_VARIANT = 2,
 } impl_var_t;
 
 typedef struct {
@@ -106,7 +119,35 @@ typedef struct {
 	int		pattern_idx;
 } ac_result_t;
 
-static ac_t;
+
+typedef uint32		ac_offset_t;
+typedef uint32		ac_state_id;
+
+typedef struct {
+	buf_header_t	hdr;
+
+	uint32			buf_len;
+	ac_offset_t		root_goto_ofst;
+	ac_offset_t		state_ofst_ofst;
+	ac_offset_t		first_state_ofst;
+	uint16			root_goto_num;
+	uint16			state_num;
+} ac_buffer_t;
+
+typedef struct {
+	ac_state_id		first_kid;
+	ac_offset_t		fail_link;
+	short			depth;
+	unsigned short	terminal;
+	unsigned char	goto_num;
+	InputTy			input_vect[1];
+} ac_state_t;
+
+
+typedef struct {
+	acs_constructor_t	*acs;
+
+} ac_convert_t;
 
 
 
@@ -116,14 +157,18 @@ typedef void *(acs_malloc_func)(size_t);
 typedef void *(acs_free_func)(void *);
 
 
+int ac_array_init(ac_array_t *array, size_t size, int n);
+void *ac_array_push(ac_array_t *a);
+void ac_array_destory(ac_array_t *a);
+void ac_array_clear(ac_array_t *a);
 
+int acs_log_error(int level, int erno, char *fmt, ...);
 
+acs_constructor_t *acs_constructor_create(void);
+void acs_constructor_free(acs_constructor_t *acs);
+acs_constructor_t *acs_construct(ac_str_t *value, int size);
+int acs_match(acs_constructor_t *acs, u_char *src, size_t len, ac_result_t *res);
 
-
-
-
-
-
-
-
+void *ac_convert(acs_constructor_t *acs);
+ac_result_t ac_match(ac_buffer_t *buf, const char *str, uint32 len);
 #endif

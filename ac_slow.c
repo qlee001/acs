@@ -2,37 +2,74 @@
 
 
 
+acs_constructor_t *acs_constructor_create(void);
+void acs_constructor_free(acs_constructor_t *acs);
+acs_constructor_t *acs_construct(ac_str_t *value, int size);
+static acs_state_t	*state_alloc(acs_constructor_t *acs);
+static void state_free(acs_state_t *s);
+
+static void acs_state_set_goto(acs_state_t *state, u_char c, acs_state_t *next);
+static acs_state_t *acs_state_get_goto(acs_state_t *state, u_char c);
+static int acs_add_pattern(acs_constructor_t *acs, ac_str_t *value, int index);
+static int propagate_faillink(acs_constructor_t *acs);
+
+int acs_match(acs_constructor_t *acs, u_char *src, size_t len, ac_result_t *res);
 
 
-static void *acs_array_push(acs_array_t *a);
-static int acs_array_init(acs_array_t *array, size_t size, int n);
 
 
-static acs_constructor_t *acs_constructor_create(void)
+acs_constructor_t *acs_constructor_create(void)
 {
 	acs_constructor_t	*acs;
 	acs = malloc(sizeof(*acs));
 	memset(acs, 0, sizeof(*acs));
 
-	acs_array_init(&acs->all_states, sizeof(acs_state_t *), 1024);
+	ac_array_init(&acs->all_states, sizeof(acs_state_t *), 1024);
+
+	acs->root = state_alloc(acs);
 	
 	return acs;
 }
 
 
-static void acs_constructor_free(acs_constructor_t *acs)
+void acs_constructor_free(acs_constructor_t *acs)
 {
+	if (acs->all_states.nelts) {
+		ac_array_t		*a = &acs->all_states;
+		acs_state_t		**base = a->elts;
+		int				num = a->nelts;
+		int i;
+		for (i=0; i < num; i++) {
+			state_free(base[i]);
+		}
+
+		ac_array_destory(&acs->all_states);
+	}
+	
 	free(acs);
 	return;
 }
 
 
-static acs_state_t	*state_alloc()
+static acs_state_t	*state_alloc(acs_constructor_t *acs)
 {
 	acs_state_t		*p;
 	p = malloc(sizeof(*p));
+	bzero(p, sizeof(*p));
+
+	acs_state_t		**tmp;
+	tmp = ac_array_push(&acs->all_states);
+	if (tmp == NULL) {
+		free(p);
+		return NULL;
+	}
+	*tmp = p;
+	p->id = acs->state_id;
+	acs->state_id++;
+	acs->state_num++;
 	return p;
 }
+
 
 static void state_free(acs_state_t *s)
 {
@@ -41,25 +78,9 @@ static void state_free(acs_state_t *s)
 }
 
 
-#define acs_string(str)			{sizeof(str)-1, (u_char *)str}
 
-static acs_str_t acs_strings[] = {
-	acs_string("thie"),
-	acs_string("hersr"),
-	acs_string("hiser"),
-	acs_string("thfslijg"),
-	{0, NULL},
-};
-static char		match_src[] = "afdgdghiserhersr";
 
-typedef struct {
-	int			start;
-	int			end;
-	int			index;
-
-} acs_match_result_t;
-
-static int acs_log_error(int level, int erno, char *fmt, ...)
+int acs_log_error(int level, int erno, char *fmt, ...)
 {
 	int			n;
 	char		buf[2048];
@@ -120,50 +141,9 @@ static u_char * acs_vslprintf(u_char *buf, u_char *last, const char *fmt, va_lis
 }
 */
 
-static acs_constructor_t *acs_construct(acs_str_t *value, int size);
-static void acs_state_set_goto(acs_state_t *state, u_char c, acs_state_t *next);
-static acs_state_t *acs_state_get_goto(acs_state_t *state, u_char c);
-static int acs_add_pattern(acs_constructor_t *acs, acs_str_t *value, int index);
-static int propagate_faillink(acs_constructor_t *acs);
-
-static int acs_match(acs_constructor_t *acs, u_char *src, size_t len, acs_match_result_t *res);
-
-int main(int argc, char *argv[])
-{
-	acs_str_t	*value;
-	int			count = 0;
-
-	for (value = acs_strings; value->len; value++) {
-		acs_log_error(1, 0, "count:%d, \tdata:%s, \tlen:%lu.", count, value->data, value->len);
-		count++;
-	}
 
 
-	  
-	acs_constructor_t		*acs;
-	acs = acs_construct(&acs_strings[0], count);
-	if (acs == NULL) {
-		fprintf(stdout, "hehe");
-		exit(1);
-	}
-
-	acs_match_result_t	res;
-	memset(&res, 0, sizeof(res));
-
-	if (acs_match(acs, (u_char *)match_src, sizeof(match_src) - 1, &res) == 1) {
-		fprintf(stderr, "matched.\n");
-		fprintf(stderr, "matched start:%d.\n", res.start);
-		fprintf(stderr, "matched end:%d.\n", res.end);
-		fprintf(stderr, "matched index:%d.\n", res.index);
-	} else {
-		fprintf(stderr, "Not match.\n");
-	}
-	
-	return 0;
-}
-
-
-static acs_constructor_t *acs_construct(acs_str_t *value, int size)
+acs_constructor_t *acs_construct(ac_str_t *value, int size)
 {
 	acs_constructor_t		*acs;
 	acs = acs_constructor_create();
@@ -173,7 +153,7 @@ static acs_constructor_t *acs_construct(acs_str_t *value, int size)
 
 
 	int count = 0;
-	for (value = acs_strings; value->len; value++, count++) {
+	for (; value->len; value++, count++) {
 		acs_add_pattern(acs, value, count);
 	}
 
@@ -183,9 +163,9 @@ static acs_constructor_t *acs_construct(acs_str_t *value, int size)
 }
 
 
-static int acs_match(acs_constructor_t *acs, u_char *str, size_t len, acs_match_result_t *res)
+int acs_match(acs_constructor_t *acs, u_char *str, size_t len, ac_result_t *res)
 {
-	acs_state_t		*root = &acs->root;
+	acs_state_t		*root = acs->root;
 	acs_state_t		*state = root;
 	int idx = 0;
 	while (idx < len) {
@@ -198,9 +178,9 @@ static int acs_match(acs_constructor_t *acs, u_char *str, size_t len, acs_match_
 	}
 
 	if (unlikely(state->terminal == 1)) {
-		res->start = idx - 1;
-		res->end = idx - 1;
-		res->index = state->index;
+		res->match_begin = idx - 1;
+		res->match_end = idx - 1;
+		res->pattern_idx = state->pattern_idx;
 		return 1;
 	}
 
@@ -216,7 +196,7 @@ static int acs_match(acs_constructor_t *acs, u_char *str, size_t len, acs_match_
 					state = acs_state_get_goto(root, c2);
 					if (state) {
 						break;
-					}
+					} 
 				}
 			} else {
 				state = fl;
@@ -227,9 +207,9 @@ static int acs_match(acs_constructor_t *acs, u_char *str, size_t len, acs_match_
 		}
 
 		if (state->terminal) {
-			res->start = idx - state->depth;
-			res->end = idx - 1;
-			res->index = state->index;
+			res->match_begin = idx - state->depth;
+			res->match_end = idx - 1;
+			res->pattern_idx = state->pattern_idx;
 			return 1;
 		}
 					
@@ -243,59 +223,21 @@ static int acs_match(acs_constructor_t *acs, u_char *str, size_t len, acs_match_
 
 
 
-static int acs_array_init(acs_array_t *array, size_t size, int n)
-{
-	array->nelts = 0;
-	array->size = size;
-	array->nalloc = n;
-	array->elts = malloc(n *size);
-	return 0;
-}
-
-static void *acs_array_push(acs_array_t *a)
-{
-	if (a->nelts == a->nalloc) {
-		u_char		*new;
-		size_t		sz = a->size * a->nalloc * 2;
-		new = malloc(sz);
-		if (new == NULL) {
-			return new;
-		}
-
-		memcpy(new, a->elts, sz / 2);
-		free(a->elts);
-		a->elts = new;
-		a->nalloc = a->nalloc * 2;
-	}
-
-	u_char *start = a->elts;
-	u_char *pos = start + a->nelts * a->size;
-	a->nelts++;
-	return pos;
-}
-
-static void acs_array_clear(acs_array_t *a)
-{
-	if (a->elts != NULL) {
-		free(a->elts);
-	}
-	return;
-}
 
 
 
 static int propagate_faillink(acs_constructor_t *acs)
 {
-	acs_state_t		*root = &acs->root;
-	acs_array_t		a;
-	acs_state_t		*state;
-	acs_array_init(&a, sizeof(acs_state_t *), 1024);
+	acs_state_t		*root = acs->root;
+	ac_array_t		a;
+	ac_array_init(&a, sizeof(acs_state_t *), 1024);
 
-	u_char c = 0;
-	for (; c < CHAR_SET_SIZE; c++) {
+	int i = 0;
+	for (; i < CHAR_SET_SIZE; i++) {
+		u_char c = i;
 		if (root->goto_map[c] != NULL) {
 			acs_state_t	**tmp;
-			tmp = acs_array_push(&a);
+			tmp = ac_array_push(&a);
 			*tmp = root->goto_map[c];
 			(*tmp)->fail_link = root;
 		}
@@ -305,8 +247,8 @@ static int propagate_faillink(acs_constructor_t *acs)
 	memcpy(goto_save, root->goto_map, sizeof(acs_state_t *) * CHAR_SET_SIZE);
 
 
-	//int i ;
-	for (c=0; c < CHAR_SET_SIZE; c++) {
+	for (i=0; i < CHAR_SET_SIZE; i++) {
+		u_char c = i;
 		acs_state_t *s = acs_state_get_goto(root, c);
 		if (s == NULL) {
 			acs_state_set_goto(root, c, root);
@@ -317,7 +259,8 @@ static int propagate_faillink(acs_constructor_t *acs)
 
 	while (1) {
 
-		for (c = 0; c < CHAR_SET_SIZE; c++) {
+		for (i = 0; i < CHAR_SET_SIZE; i++) {
+			u_char	c = i;
 			acs_state_t		**tmp = a.elts;
 			acs_state_t		*s = tmp[current];
 			acs_state_t		*fl = s->fail_link;
@@ -341,7 +284,7 @@ static int propagate_faillink(acs_constructor_t *acs)
 			tran->fail_link = tran_fl;
 			{ 
 				tran->fail_link = tran_fl;
- 				acs_state_t		**aaa = acs_array_push(&a);
+ 				acs_state_t		**aaa = ac_array_push(&a);
 				*aaa = tran;
 			}
 		}
@@ -355,23 +298,24 @@ static int propagate_faillink(acs_constructor_t *acs)
 }
 
 
-static int acs_add_pattern(acs_constructor_t *acs, acs_str_t *value, int index)
+static int acs_add_pattern(acs_constructor_t *acs, ac_str_t *value, int index)
 {
-	acs_state_t		*state = &acs->root;
+	acs_state_t		*state = acs->root;
 	u_char			*str = value->data;
 	int i = 0;
 	for (i = 0; i < value->len; i++) {
 		const char c = str[i];
 		acs_state_t		*new = acs_state_get_goto(state, c);
 		if (new == NULL) {
-			new = state_alloc();
+			new = state_alloc(acs);
 			new->depth = state->depth + 1;
+			new->current = c;
 			acs_state_set_goto(state, c, new);
 		}
 		state = new;
 	}
 	state->terminal = 1;
-	state->index = index;
+	state->pattern_idx = index;
 	return 0;
 }
 
@@ -383,6 +327,7 @@ static acs_state_t *acs_state_get_goto(acs_state_t *state, u_char c)
 
 static void acs_state_set_goto(acs_state_t *state, u_char c, acs_state_t *next)
 {
+	state->goto_num++;
 	state->goto_map[c] = next;
 	return;
 }
