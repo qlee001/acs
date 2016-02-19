@@ -80,6 +80,7 @@ static void state_free(acs_state_t *s)
 
 
 
+/*  
 int acs_log_error(int level, int erno, char *fmt, ...)
 {
 	int			n;
@@ -103,7 +104,6 @@ int acs_log_error(int level, int erno, char *fmt, ...)
 	return 0;
 }
 
-/*  
 static int acs_log_error(int level, int erno, char *fmt, ...)
 {
 	int			n;

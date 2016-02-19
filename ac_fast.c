@@ -18,11 +18,11 @@
 #include "ac.h"
 
 
-void populate_root_goto_func(ac_buffer_t *buf, int * id_map, acs_constructor_t *acs);
-ac_buffer_t *ac_alloc_buffer(acs_constructor_t *acs);
-uint32 ac_calc_state_size(acs_state_t *s);
+static void populate_root_goto_func(ac_buffer_t *, int *, acs_constructor_t *);
+static ac_buffer_t *ac_alloc_buffer(acs_constructor_t *, ac_bufalloc_t *);
+static uint32 ac_calc_state_size(acs_state_t *);
 
-uint32 ac_calc_state_size(acs_state_t *s)
+static uint32 ac_calc_state_size(acs_state_t *s)
 {
 	ac_state_t		dummy;
 	uint32	sz = offsetof(ac_state_t, input_vect);
@@ -38,7 +38,7 @@ uint32 ac_calc_state_size(acs_state_t *s)
 }
 
 
-ac_buffer_t *ac_alloc_buffer(acs_constructor_t *acs)
+static ac_buffer_t *ac_alloc_buffer(acs_constructor_t *acs, ac_bufalloc_t *alloc)
 {
 	acs_state_t			*root_state = acs->root;
 	uint32 root_fanout = root_state->goto_num;
@@ -80,10 +80,9 @@ ac_buffer_t *ac_alloc_buffer(acs_constructor_t *acs)
 	sz += state_sz;
 
 	//Step 2 : Allocate buffer, and populate header.
-	ac_buffer_t		*buf = malloc(sz);
+	ac_buffer_t		*buf = alloc->malloc(alloc->data, sz);;
 	
 	buf->hdr.magic_num = AC_MAGIC_NUM;
-	buf->hdr.impl_variant = IMPL_FAST_VARIANT;
 	buf->buf_len = sz;
 	buf->root_goto_ofst = root_goto_ofst;
 	buf->state_ofst_ofst = state_ofst_ofst;
@@ -94,7 +93,7 @@ ac_buffer_t *ac_alloc_buffer(acs_constructor_t *acs)
 }
 
   
-void populate_root_goto_func(ac_buffer_t *buf, int * id_map, acs_constructor_t *acs)
+static void populate_root_goto_func(ac_buffer_t *buf, int * id_map, acs_constructor_t *acs)
 {
 	unsigned char	*buf_base = (unsigned char *)buf;
 	InputTy			*root_gotos = (InputTy *)(buf_base + buf->root_goto_ofst);
@@ -123,14 +122,14 @@ void populate_root_goto_func(ac_buffer_t *buf, int * id_map, acs_constructor_t *
 
 
 
-void *ac_convert(acs_constructor_t *acs)
+void *ac_convert(acs_constructor_t *acs, ac_bufalloc_t *alloc)
 {
 	//Step 1: Some preparation stuff.
 	//
 	
 
 	//Step 2: allocate buffer to accommodate the entire AC graph.
-	ac_buffer_t		*buf = ac_alloc_buffer(acs);
+	ac_buffer_t		*buf = ac_alloc_buffer(acs, alloc);
 	if (buf == NULL) {
 		return NULL;
 	}

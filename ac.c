@@ -69,6 +69,9 @@ void ac_array_destory(ac_array_t *a)
 
 #define ac_string(str)			{sizeof(str)-1, (u_char *)str}
 
+
+/*  
+
 static ac_str_t ac_strings[] = {
 	ac_string("thie"),
 	ac_string("her"),
@@ -123,3 +126,5 @@ int main(int argc, char *argv[])
 	acs_constructor_free(acs);
 	return 0;
 }
+
+*/

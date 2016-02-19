@@ -86,10 +86,15 @@ struct acs_state_s {
 	struct acs_state_s		*fail_link;
 };
 
-//内存分配函数
-typedef void *(acs_malloc_func)(size_t);
-typedef void *(acs_free_func)(void *);
 
+typedef void *(*malloc_func_pt)(uint64, size_t);
+typedef void (*free_func_pt)(uint64, void *);
+
+typedef struct {
+    malloc_func_pt          malloc;
+    free_func_pt            free;
+    uint64                  data;
+} ac_bufalloc_t;
 
 
 typedef struct {
@@ -101,16 +106,11 @@ typedef struct {
 } acs_constructor_t;
 
 
-typedef enum {
-	IMPL_SLOW_VARIANT = 1,
-	IMPL_FAST_VARIANT = 2,
-} impl_var_t;
 
 typedef struct {
 	unsigned char		magic_num;
-	unsigned char		impl_variant;
+	unsigned char		reserve;
 } buf_header_t;
-
 
 
 typedef struct {
@@ -144,18 +144,6 @@ typedef struct {
 } ac_state_t;
 
 
-typedef struct {
-	acs_constructor_t	*acs;
-
-} ac_convert_t;
-
-
-
-
-//内存分配函数
-typedef void *(acs_malloc_func)(size_t);
-typedef void *(acs_free_func)(void *);
-
 
 int ac_array_init(ac_array_t *array, size_t size, int n);
 void *ac_array_push(ac_array_t *a);
@@ -169,6 +157,6 @@ void acs_constructor_free(acs_constructor_t *acs);
 acs_constructor_t *acs_construct(ac_str_t *value, int size);
 int acs_match(acs_constructor_t *acs, u_char *src, size_t len, ac_result_t *res);
 
-void *ac_convert(acs_constructor_t *acs);
+void *ac_convert(acs_constructor_t *acs, ac_bufalloc_t *);
 ac_result_t ac_match(ac_buffer_t *buf, const char *str, uint32 len);
 #endif
