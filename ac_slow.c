@@ -251,7 +251,7 @@ static int propagate_faillink(acs_constructor_t *acs)
 		u_char c = i;
 		acs_state_t *s = acs_state_get_goto(root, c);
 		if (s == NULL) {
-			acs_state_set_goto(root, c, root);
+			root->goto_map[c] = root;
 		}
 	}
 	

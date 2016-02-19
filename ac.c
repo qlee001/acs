@@ -71,8 +71,8 @@ void ac_array_destory(ac_array_t *a)
 
 static ac_str_t ac_strings[] = {
 	ac_string("thie"),
-	ac_string("hersr"),
-	ac_string("hiser"),
+	ac_string("her"),
+	ac_string("his"),
 	ac_string("thfslijg"),
 	{0, NULL},
 };

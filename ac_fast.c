@@ -69,11 +69,11 @@ ac_buffer_t *ac_alloc_buffer(acs_constructor_t *acs)
 
 	uint32	state_sz = 0;
 	ac_array_t		*all_states = &acs->all_states;
-	acs_state_t		*base = all_states->elts;
+	acs_state_t		**base = all_states->elts;
 	int i;
 	int sum = all_states->nelts;
 	for (i=0; i < sum; i++) {
-		state_sz += ac_calc_state_size(&base[i]);
+		state_sz += ac_calc_state_size(base[i]);
 	}
 
 	state_sz -= ac_calc_state_size(root_state);
@@ -81,7 +81,7 @@ ac_buffer_t *ac_alloc_buffer(acs_constructor_t *acs)
 
 	//Step 2 : Allocate buffer, and populate header.
 	ac_buffer_t		*buf = malloc(sz);
-
+	
 	buf->hdr.magic_num = AC_MAGIC_NUM;
 	buf->hdr.impl_variant = IMPL_FAST_VARIANT;
 	buf->buf_len = sz;
@@ -107,15 +107,16 @@ void populate_root_goto_func(ac_buffer_t *buf, int * id_map, acs_constructor_t *
 
 	int i;
 	 
-	for (i = 0; i < 256; i++, new_id++) {
+	for (i = 0; i < 256; i++) {
 		acs_state_t *state = root_state->goto_map[i];
 		if (state == NULL) {
 			continue;
 		}
-		id_map[state->id] = new_id;
 		if (likely(root_state->goto_num != 255)) {
 			root_gotos[state->current] = new_id;
 		}
+		id_map[state->id] = new_id;
+		new_id++;
 	}
 	return;
 }
@@ -185,7 +186,7 @@ void *ac_convert(acs_constructor_t *acs)
 
 		new_s->first_kid = wl.nelts + 1;
 		new_s->depth = old_s->depth;
-		new_s->terminal = old_s->terminal?old_s->id + 1 : 0;
+		new_s->terminal = old_s->terminal?old_s->pattern_idx + 1 : 0;
 
 		uint32 gotonum = old_s->goto_num;
 		new_s->goto_num = gotonum;
